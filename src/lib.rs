@@ -19,11 +19,11 @@ pub fn send_prices_to_solana(btc_price: u64, eth_price: u64) -> Result<(), Box<d
     // Initialize Solana client
     let rpc_client = RpcClient::new("https://api.mainnet-beta.solana.com");
 
-    // Your Solana program ID and price data account
+    // Solana program ID and price data account
     let program_id = Pubkey::from_str("EVkRuHAH76x6GYsx4isftKWCseJTCVtQYvh64MEA6q2U")?;
     let price_data_account = Pubkey::from_str("AStbVxPR31uzdqSaF96cQ9oM1J1UWL31kfA6gYQKjibs")?;
 
-    // Your keypair
+    // keypair
     let keypair = Keypair::new();
 
     // Create instruction data
