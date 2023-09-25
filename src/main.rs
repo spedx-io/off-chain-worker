@@ -1,5 +1,6 @@
 use reqwest;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     instruction::Instruction,
@@ -10,14 +11,15 @@ use solana_sdk::{
 };
 use std::str::FromStr;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AssetContext {
-    mark_price: f64,
-    current_funding: f64,
-    open_interest: f64,
+    maxLeverage: Option<i32>,
+    name: String,
+    onlyIsolated: bool,
+    szDecimals: i32,
 }
 
-pub async fn fetch_hyperliquid_price() -> Result<Vec<AssetContext>, reqwest::Error> {
+pub async fn fetch_hyperliquid_price() -> Result<Vec<AssetContext>, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     let res = client
         .post("https://api.hyperliquid.xyz/info")
@@ -28,9 +30,16 @@ pub async fn fetch_hyperliquid_price() -> Result<Vec<AssetContext>, reqwest::Err
         .send()
         .await?;
 
-    let asset_contexts: Vec<AssetContext> = res.json().await?;
-    Ok(asset_contexts)
+    let api_response: Vec<serde_json::Value> = res.json().await?;
+    for item in &api_response {
+        if let Some(universe) = item.get("universe") {
+            let asset_contexts: Vec<AssetContext> = serde_json::from_value(universe.clone())?;
+            return Ok(asset_contexts);
+        }
+    }
+    Err(Box::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Universe not found")))
 }
+
 
 pub fn send_prices_to_solana(
     asset_contexts: Vec<AssetContext>,
@@ -41,8 +50,8 @@ pub fn send_prices_to_solana(
     let keypair = read_keypair_file("/Users/akshatsharma/octane/keys/octane.json")?;
 
     let mut instruction_data = vec![];
-    for asset in asset_contexts {
-        instruction_data.extend_from_slice(&asset.mark_price.to_le_bytes());
+    for asset in asset_contexts.iter().filter_map(|asset| asset.maxLeverage) {
+        instruction_data.extend_from_slice(&asset.to_le_bytes());
     }
 
     let instruction = Instruction {
@@ -54,9 +63,7 @@ pub fn send_prices_to_solana(
         data: instruction_data,
     };
 
-    // let message = Message::new(&[instruction], Some(&keypair.pubkey()));
     let mut transaction = Transaction::new_with_payer(&[instruction], Some(&keypair.pubkey()));
-
     let blockhash = rpc_client.get_latest_blockhash()?;
     transaction.try_sign(&[&keypair], blockhash)?;
 
@@ -77,6 +84,17 @@ pub fn send_prices_to_solana(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let asset_contexts = fetch_hyperliquid_price().await?;
-    send_prices_to_solana(asset_contexts)?;
+    let hpos_data = asset_contexts.iter().find(|&asset| asset.name == "HPOS");
+
+    match hpos_data {
+        Some(data) => {
+            println!("HPOS Data: {:?}", data);
+            send_prices_to_solana(vec![data.clone()])?;
+        },
+        None => {
+            println!("HPOS data not found");
+        }
+    }
+
     Ok(())
 }
