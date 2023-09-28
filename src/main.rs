@@ -2,8 +2,7 @@ extern crate switchboard_solana;
 use solana_sdk::{
     instruction::Instruction,
     pubkey::Pubkey,
-    signer::keypair::read_keypair_file,
-    commitment_config::CommitmentConfig,
+    signature::read_keypair_file,
 };
 use reqwest;
 use serde::{Deserialize, Serialize};
@@ -44,7 +43,6 @@ pub fn send_prices_to_solana(
 ) -> Result<Vec<Instruction>, Box<dyn std::error::Error>> {
     let program_id = Pubkey::from_str("6pbB1VzzU5VDtmQBkxmQNAcSbPnS9Vyon6kBb2YwgKeo")?;
     let price_data_account = Pubkey::from_str("GqnDxrf8ra4WFD9ZL8vWR5bj7zftBZT8ZJC7wB5w11Xs")?;
-    let keypair = read_keypair_file("/Users/akshatsharma/octane/keys/octane.json")?;
 
     let mut instruction_data = vec![];
     for asset in asset_contexts.iter().filter_map(|asset| asset.max_leverage) {
@@ -65,8 +63,15 @@ pub fn send_prices_to_solana(
 
 #[tokio::main(worker_threads = 12)]
 async fn main() {
-    let commitment_config = CommitmentConfig::default(); // Use the default commitment config
-    let runner = FunctionRunner::new_from_cluster(Cluster::Devnet, Some(commitment_config)).unwrap();
+    let function_key = Pubkey::from_str("AStbVxPR31uzdqSaF96cQ9oM1J1UWL31kfA6gYQKjibs").unwrap(); // Use specific Pubkey
+
+    let runner = match FunctionRunner::new_from_cluster(Cluster::Devnet, Some(function_key)) {
+        Ok(runner) => runner,
+        Err(e) => {
+            eprintln!("Failed to initialize FunctionRunner: {:?}", e);
+            return;
+        }
+    };
 
     // Fetch asset contexts from HyperLiquid
     let asset_contexts = fetch_hyperliquid_price().await.unwrap();
