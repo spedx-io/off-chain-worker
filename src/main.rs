@@ -1,22 +1,21 @@
-use reqwest;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use solana_client::rpc_client::RpcClient;
+extern crate switchboard_solana;
 use solana_sdk::{
     instruction::Instruction,
-    message::Message,
     pubkey::Pubkey,
-    signature::{Keypair, read_keypair_file, Signer},
-    transaction::Transaction,
+    signer::keypair::read_keypair_file,
+    commitment_config::CommitmentConfig,
 };
+use reqwest;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use switchboard_solana::{Cluster, FunctionRunner};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AssetContext {
-    maxLeverage: Option<i32>,
+    max_leverage: Option<i32>,
     name: String,
-    onlyIsolated: bool,
-    szDecimals: i32,
+    only_isolated: bool,
+    sz_decimals: i32,
 }
 
 pub async fn fetch_hyperliquid_price() -> Result<Vec<AssetContext>, Box<dyn std::error::Error>> {
@@ -40,17 +39,15 @@ pub async fn fetch_hyperliquid_price() -> Result<Vec<AssetContext>, Box<dyn std:
     Err(Box::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Universe not found")))
 }
 
-
 pub fn send_prices_to_solana(
     asset_contexts: Vec<AssetContext>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let rpc_client = RpcClient::new("https://api.devnet.solana.com");
+) -> Result<Vec<Instruction>, Box<dyn std::error::Error>> {
     let program_id = Pubkey::from_str("6pbB1VzzU5VDtmQBkxmQNAcSbPnS9Vyon6kBb2YwgKeo")?;
     let price_data_account = Pubkey::from_str("GqnDxrf8ra4WFD9ZL8vWR5bj7zftBZT8ZJC7wB5w11Xs")?;
     let keypair = read_keypair_file("/Users/akshatsharma/octane/keys/octane.json")?;
 
     let mut instruction_data = vec![];
-    for asset in asset_contexts.iter().filter_map(|asset| asset.maxLeverage) {
+    for asset in asset_contexts.iter().filter_map(|asset| asset.max_leverage) {
         instruction_data.extend_from_slice(&asset.to_le_bytes());
     }
 
@@ -63,38 +60,30 @@ pub fn send_prices_to_solana(
         data: instruction_data,
     };
 
-    let mut transaction = Transaction::new_with_payer(&[instruction], Some(&keypair.pubkey()));
-    let blockhash = rpc_client.get_latest_blockhash()?;
-    transaction.try_sign(&[&keypair], blockhash)?;
-
-    let result = rpc_client.send_and_confirm_transaction(&transaction);
-
-    match result {
-        Ok(_) => {
-            println!("Transaction succeeded");
-            Ok(())
-        }
-        Err(err) => {
-            println!("Transaction failed: {:?}", err);
-            Err(Box::new(err))
-        }
-    }
+    Ok(vec![instruction])
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let asset_contexts = fetch_hyperliquid_price().await?;
+#[tokio::main(worker_threads = 12)]
+async fn main() {
+    let commitment_config = CommitmentConfig::default(); // Use the default commitment config
+    let runner = FunctionRunner::new_from_cluster(Cluster::Devnet, Some(commitment_config)).unwrap();
+
+    // Fetch asset contexts from HyperLiquid
+    let asset_contexts = fetch_hyperliquid_price().await.unwrap();
     let hpos_data = asset_contexts.iter().find(|&asset| asset.name == "HPOS");
 
-    match hpos_data {
+    // Generate Solana instructions based on fetched data
+    let instructions = match hpos_data {
         Some(data) => {
             println!("HPOS Data: {:?}", data);
-            send_prices_to_solana(vec![data.clone()])?;
+            send_prices_to_solana(vec![data.clone()]).unwrap()
         },
         None => {
             println!("HPOS data not found");
+            vec![]
         }
-    }
+    };
 
-    Ok(())
+    // Emit the instructions to the Switchboard function
+    runner.emit(instructions).await.unwrap();
 }
