@@ -4,6 +4,9 @@ FROM rust:1.57 as builder
 # Set the working directory in the image to /usr/src/app
 WORKDIR /usr/src/app
 
+# Clear Cargo cache
+RUN rm -rf /usr/local/cargo/registry
+
 # Copy the current directory contents into the container at /usr/src/app
 COPY . .
 
@@ -14,7 +17,7 @@ RUN cargo build --release
 FROM alpine:latest
 
 # Copy the binary from the builder
-COPY --from=builder /usr/src/app/target/release/your_binary_name /usr/local/bin/
+COPY --from=builder /usr/src/app/target/release/spedx-feed /usr/local/bin/
 
 # Run your binary
-CMD ["your_binary_name"]
+CMD ["spedx-feed"]
