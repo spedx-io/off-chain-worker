@@ -2,12 +2,11 @@ extern crate switchboard_solana;
 use solana_sdk::{
     instruction::Instruction,
     pubkey::Pubkey,
-    signature::read_keypair_file,
 };
 use reqwest;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use switchboard_solana::{Cluster, FunctionRunner};
+use switchboard_solana::{FunctionRunner, Cluster};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AssetContext {
@@ -63,9 +62,8 @@ pub fn send_prices_to_solana(
 
 #[tokio::main(worker_threads = 12)]
 async fn main() {
-    let function_key = Pubkey::from_str("AStbVxPR31uzdqSaF96cQ9oM1J1UWL31kfA6gYQKjibs").unwrap(); // Use specific Pubkey
-
-    let runner = match FunctionRunner::new_from_cluster(Cluster::Devnet, Some(function_key)) {
+    // Initialize the FunctionRunner
+    let runner = match FunctionRunner::new_from_cluster(Cluster::Devnet, None) {
         Ok(runner) => runner,
         Err(e) => {
             eprintln!("Failed to initialize FunctionRunner: {:?}", e);
