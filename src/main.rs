@@ -40,7 +40,7 @@ pub async fn fetch_hyperliquid_price() -> Result<Vec<AssetContext>, Box<dyn std:
 pub fn send_prices_to_solana(
     asset_contexts: Vec<AssetContext>,
 ) -> Result<Vec<Instruction>, Box<dyn std::error::Error>> {
-    let program_id = Pubkey::from_str("6pbB1VzzU5VDtmQBkxmQNAcSbPnS9Vyon6kBb2YwgKeo")?;
+    let program_id = Pubkey::from_str("7VwEKCGjDEH9hdYX1mYVwRLeQA1DeFti6qk5bto3QEqL")?;
     let price_data_account = Pubkey::from_str("GqnDxrf8ra4WFD9ZL8vWR5bj7zftBZT8ZJC7wB5w11Xs")?;
 
     let mut instruction_data = vec![];
