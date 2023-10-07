@@ -44,13 +44,14 @@ pub fn send_prices_to_solana(
     let price_data_account = Pubkey::from_str("GqnDxrf8ra4WFD9ZL8vWR5bj7zftBZT8ZJC7wB5w11Xs")?;
 
     let mut instruction_data = vec![];
-    for asset in asset_contexts.iter().filter_map(|asset| asset.max_leverage) {
+    for asset in asset_contexts.iter() {
         if ["FTT", "HPOS", "WLD", "LDO", "GMX", "LINK", "dYdX"].contains(&asset.name.as_str()) {
-            instruction_data.extend_from_slice(&asset.to_le_bytes());
+            if let Some(max_leverage) = asset.max_leverage {
+                instruction_data.extend_from_slice(&max_leverage.to_le_bytes());
+            }
         }
     }
-
-    let instruction = Instruction {
+        let instruction = Instruction {
         program_id,
         accounts: vec![solana_sdk::instruction::AccountMeta::new(
             price_data_account,
