@@ -45,7 +45,9 @@ pub fn send_prices_to_solana(
 
     let mut instruction_data = vec![];
     for asset in asset_contexts.iter().filter_map(|asset| asset.max_leverage) {
-        instruction_data.extend_from_slice(&asset.to_le_bytes());
+        if ["FTT", "HPOS", "WLD", "LDO", "GMX", "LINK", "dYdX"].contains(&asset.name.as_str()) {
+            instruction_data.extend_from_slice(&asset.to_le_bytes());
+        }
     }
 
     let instruction = Instruction {
@@ -73,18 +75,19 @@ async fn main() {
 
     // Fetch asset contexts from HyperLiquid
     let asset_contexts = fetch_hyperliquid_price().await.unwrap();
-    let hpos_data = asset_contexts.iter().find(|&asset| asset.name == "HPOS");
+    let relevant_data: Vec<AssetContext> = asset_contexts
+        .iter()
+        .filter(|&asset| ["FTT", "HPOS", "WLD", "LDO", "GMX", "LINK", "dYdX"].contains(&asset.name.as_str()))
+        .cloned()
+        .collect();
 
     // Generate Solana instructions based on fetched data
-    let instructions = match hpos_data {
-        Some(data) => {
-            println!("HPOS Data: {:?}", data);
-            send_prices_to_solana(vec![data.clone()]).unwrap()
-        },
-        None => {
-            println!("HPOS data not found");
-            vec![]
-        }
+    let instructions = if !relevant_data.is_empty() {
+        println!("Relevant Data: {:?}", relevant_data);
+        send_prices_to_solana(relevant_data).unwrap()
+    } else {
+        println!("Relevant data not found");
+        vec![]
     };
 
     // Emit the instructions to the Switchboard function
